@@ -17,35 +17,80 @@ export const PRIORITY_LABELS = {
 };
 
 export const ACCENT_PRESETS = [
-  { id: 'blue', name: 'オーシャン', color: '#2563eb', soft: 'rgba(37, 99, 235, 0.14)' },
-  { id: 'indigo', name: 'インディゴ', color: '#4f46e5', soft: 'rgba(79, 70, 229, 0.14)' },
-  { id: 'emerald', name: 'エメラルド', color: '#059669', soft: 'rgba(5, 150, 105, 0.14)' },
-  { id: 'coral', name: 'コーラル', color: '#e11d48', soft: 'rgba(225, 29, 72, 0.14)' },
-  { id: 'violet', name: 'バイオレット', color: '#7c3aed', soft: 'rgba(124, 58, 237, 0.14)' },
+  {
+    id: 'mono',
+    name: 'モノトーン',
+    color: '#fafafa',
+    lightColor: '#18181b',
+    onColor: '#09090b',
+    lightOnColor: '#fafafa',
+    soft: 'rgba(255, 255, 255, 0.10)',
+    lightSoft: 'rgba(24, 24, 27, 0.08)',
+  },
+  {
+    id: 'indigo',
+    name: 'インディゴ',
+    color: '#818cf8',
+    lightColor: '#4f46e5',
+    onColor: '#09090b',
+    lightOnColor: '#ffffff',
+    soft: 'rgba(129, 140, 248, 0.16)',
+    lightSoft: 'rgba(79, 70, 229, 0.11)',
+  },
+  {
+    id: 'mint',
+    name: 'ミント',
+    color: '#34d399',
+    lightColor: '#059669',
+    onColor: '#09090b',
+    lightOnColor: '#ffffff',
+    soft: 'rgba(52, 211, 153, 0.15)',
+    lightSoft: 'rgba(5, 150, 105, 0.11)',
+  },
+  {
+    id: 'amber',
+    name: 'アンバー',
+    color: '#fbbf24',
+    lightColor: '#d97706',
+    onColor: '#09090b',
+    lightOnColor: '#ffffff',
+    soft: 'rgba(251, 191, 36, 0.16)',
+    lightSoft: 'rgba(217, 119, 6, 0.12)',
+  },
+  {
+    id: 'rose',
+    name: 'ローズ',
+    color: '#fb7185',
+    lightColor: '#e11d48',
+    onColor: '#09090b',
+    lightOnColor: '#ffffff',
+    soft: 'rgba(251, 113, 133, 0.16)',
+    lightSoft: 'rgba(225, 29, 72, 0.11)',
+  },
 ];
 
 export const CATEGORY_COLORS = [
-  '#2563eb',
-  '#059669',
-  '#d97706',
-  '#e11d48',
-  '#7c3aed',
-  '#0891b2',
-  '#db2777',
-  '#64748b',
+  '#818cf8',
+  '#34d399',
+  '#fbbf24',
+  '#fb7185',
+  '#a78bfa',
+  '#38bdf8',
+  '#f472b6',
+  '#a1a1aa',
 ];
 
 export const DEFAULT_CATEGORIES = [
-  { id: 'cat-personal', name: '個人', color: '#2563eb' },
-  { id: 'cat-life', name: '生活', color: '#059669' },
-  { id: 'cat-work', name: '仕事', color: '#7c3aed' },
-  { id: 'cat-shopping', name: '買い物', color: '#d97706' },
-  { id: 'cat-study', name: '学習', color: '#0891b2' },
+  { id: 'cat-personal', name: '個人', color: '#818cf8' },
+  { id: 'cat-life', name: '生活', color: '#34d399' },
+  { id: 'cat-work', name: '仕事', color: '#a78bfa' },
+  { id: 'cat-shopping', name: '買い物', color: '#fbbf24' },
+  { id: 'cat-study', name: '学習', color: '#38bdf8' },
 ];
 
 export const DEFAULT_SETTINGS = {
-  theme: 'system', // 'system' | 'light' | 'dark'
-  accent: 'blue',
+  theme: 'dark', // 'dark' | 'light' | 'system'
+  accent: 'mono',
 };
 
 export function createId(prefix = 'id') {

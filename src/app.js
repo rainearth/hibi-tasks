@@ -76,9 +76,18 @@ const ui = {
 const appRoot = document.getElementById('app');
 
 // テーマ・アクセントカラーの適用
+function isEffectiveDark() {
+  const { theme } = state.settings;
+  if (theme === 'dark') return true;
+  if (theme === 'light') return false;
+  return Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+
 function applyThemeAndAccent() {
   const { theme, accent } = state.settings;
   const root = document.documentElement;
+  const dark = isEffectiveDark();
+
   if (theme === 'dark' || theme === 'light') {
     root.dataset.theme = theme;
   } else {
@@ -86,16 +95,14 @@ function applyThemeAndAccent() {
   }
 
   const preset = ACCENT_PRESETS.find((p) => p.id === accent) || ACCENT_PRESETS[0];
-  root.style.setProperty('--accent', preset.color);
-  root.style.setProperty('--accent-soft', preset.soft);
+  root.style.setProperty('--accent', dark ? preset.color : preset.lightColor);
+  root.style.setProperty('--on-accent', dark ? preset.onColor : preset.lightOnColor);
+  root.style.setProperty('--accent-soft', dark ? preset.soft : preset.lightSoft);
 
   // iOS Safariのステータスバー/テーマカラーを同期
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   if (metaTheme) {
-    const isDark =
-      theme === 'dark' ||
-      (theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    metaTheme.setAttribute('content', isDark ? '#0f172a' : '#f4f6fb');
+    metaTheme.setAttribute('content', dark ? '#09090b' : '#fafaf9');
   }
 }
 
@@ -277,48 +284,42 @@ function renderHeader() {
     today: '今日',
     upcoming: '予定',
     routines: 'ルーティン',
-    all: 'すべてのタスク',
+    all: 'すべて',
   };
 
   const subtitles = {
     today: formatHeaderDate(todayStr),
-    upcoming: 'これからのスケジュール',
-    routines: `登録中 ${state.tasks.filter((t) => isRecurring(t)).length}件`,
-    all: `未完了 ${state.tasks.filter((t) => !t.completed).length}件`,
+    upcoming: 'UPCOMING',
+    routines: `ROUTINES · ${state.tasks.filter((t) => isRecurring(t)).length}`,
+    all: `ALL TASKS · 残り ${state.tasks.filter((t) => !t.completed).length}`,
   };
 
-  // プログレスリング（今日タブでのみ表示）
-  const r = 16;
-  const circumference = 2 * Math.PI * r;
-  const offset = circumference - (progress / 100) * circumference;
-
-  const progressRingHtml =
-    ui.activeTab === 'today'
+  const progressLineHtml =
+    ui.activeTab === 'today' && totalCount > 0
       ? `
-        <div class="progress-pill" aria-label="今日の進捗 ${doneCount}/${totalCount}">
-          <svg class="progress-ring" width="40" height="40" viewBox="0 0 40 40">
-            <circle class="progress-ring-bg" cx="20" cy="20" r="${r}" />
-            <circle class="progress-ring-fill" cx="20" cy="20" r="${r}"
-              stroke-dasharray="${circumference}"
-              stroke-dashoffset="${offset}" />
-          </svg>
-          <span class="progress-text">${doneCount}/${totalCount}</span>
+        <div class="hero-progress" aria-label="今日の進捗 ${doneCount}/${totalCount}">
+          <div class="hero-progress-track">
+            <div class="hero-progress-fill" style="width:${progress}%"></div>
+          </div>
+          <span class="hero-progress-label">${doneCount} / ${totalCount}</span>
         </div>
       `
       : '';
 
   return `
     <header class="app-header">
-      <div class="header-left">
-        <p class="header-subtitle">${escapeHtml(subtitles[ui.activeTab])}</p>
-        <h1 class="header-title">${escapeHtml(titles[ui.activeTab])}</h1>
+      <div class="header-top">
+        <div class="header-left">
+          <p class="header-subtitle">${escapeHtml(subtitles[ui.activeTab])}</p>
+          <h1 class="header-title">${escapeHtml(titles[ui.activeTab])}</h1>
+        </div>
+        <div class="header-right">
+          <button type="button" class="icon-btn" data-action="open-settings" aria-label="設定を開く">
+            ${icons.settings(19)}
+          </button>
+        </div>
       </div>
-      <div class="header-right">
-        ${progressRingHtml}
-        <button type="button" class="icon-btn" data-action="open-settings" aria-label="設定を開く">
-          ${icons.settings(21)}
-        </button>
-      </div>
+      ${progressLineHtml}
     </header>
   `;
 }
@@ -329,50 +330,54 @@ function renderTaskCard(task, options = {}) {
   const checked = isDoneView || (!recurring && task.completed) || (recurring && task.lastCompletedDate === todayStr);
   const category = getCategoryById(task.categoryId);
   const isOverdue = !checked && task.dueDate && task.dueDate < todayStr;
-  const isToday = task.dueDate === todayStr;
   const subtasks = task.subtasks || [];
   const subDone = subtasks.filter((s) => s.completed).length;
   const expanded = ui.expandedTaskIds.has(task.id);
 
-  // メタ情報バッジ
-  const badges = [];
+  // 引き算の繊細なインライン・メタ情報
+  const metaItems = [];
 
   if (task.dueDate) {
-    const dueClass = isOverdue ? 'badge-overdue' : isToday ? 'badge-today' : 'badge-neutral';
-    const label = recurring && checked ? `次回: ${formatDueDateLabel(task.dueDate, todayStr)}` : formatDueDateLabel(task.dueDate, todayStr);
-    badges.push(`<span class="meta-badge ${dueClass}">${icons.calendar(12)} ${escapeHtml(label)}</span>`);
+    const dueClass = isOverdue ? 'meta-item is-danger' : 'meta-item';
+    const label = recurring && checked ? `次回 ${formatDueDateLabel(task.dueDate, todayStr)}` : formatDueDateLabel(task.dueDate, todayStr);
+    // 今日タブの「今日」は冗長なので期限切れや翌日以降、ルーティン次回日のみスッキリ表示
+    if (!(ui.activeTab === 'today' && !isOverdue && !checked && task.dueDate === todayStr)) {
+      metaItems.push(`<span class="${dueClass}">${icons.calendar(12)} ${escapeHtml(label)}</span>`);
+    }
   }
 
   if (recurring) {
-    badges.push(`<span class="meta-badge badge-routine">${icons.repeat(12)} ${escapeHtml(formatRecurrenceLabel(task.recurrence))}</span>`);
+    metaItems.push(`<span class="meta-item is-routine">${icons.repeat(12)} ${escapeHtml(formatRecurrenceLabel(task.recurrence))}</span>`);
     if (task.streak > 0) {
-      badges.push(`<span class="meta-badge badge-streak">${icons.flame(12)} ${task.streak}回連続</span>`);
+      metaItems.push(`<span class="meta-item is-streak">${icons.flame(12)} ${task.streak}</span>`);
     }
   }
 
   if (category) {
-    badges.push(
-      `<span class="meta-badge badge-category">
+    metaItems.push(
+      `<span class="meta-item">
         <span class="cat-dot" style="background:${escapeHtml(category.color)}"></span>
         ${escapeHtml(category.name)}
       </span>`
     );
   }
 
-  if (task.priority && task.priority !== 'none') {
-    badges.push(`<span class="meta-badge badge-priority-${task.priority}">${icons.flag(12)} ${PRIORITY_LABELS[task.priority]}</span>`);
+  if (task.priority === 'high') {
+    metaItems.push(`<span class="meta-item is-danger">${icons.flag(11)} 高</span>`);
+  } else if (task.priority === 'medium') {
+    metaItems.push(`<span class="meta-item is-warning">${icons.flag(11)} 中</span>`);
   }
 
   if (subtasks.length > 0) {
-    badges.push(
-      `<button type="button" class="meta-badge meta-badge-btn ${subDone === subtasks.length ? 'badge-sub-done' : ''}" data-action="toggle-expand" data-id="${escapeHtml(task.id)}" aria-label="サブタスクを開閉">
-        ${icons.subtasks(12)} ${subDone}/${subtasks.length}
+    metaItems.push(
+      `<button type="button" class="meta-sub-btn ${subDone === subtasks.length ? 'is-all-done' : ''}" data-action="toggle-expand" data-id="${escapeHtml(task.id)}" aria-label="サブタスクを開閉">
+        ${icons.subtasks(11)} ${subDone}/${subtasks.length}
       </button>`
     );
   }
 
   if (task.notes && task.notes.trim() !== '') {
-    badges.push(`<span class="meta-badge badge-neutral" title="メモあり">${icons.note(12)} メモ</span>`);
+    metaItems.push(`<span class="meta-item" title="メモあり">${icons.note(12)}</span>`);
   }
 
   // 展開時のサブタスクインラインチェックリスト
@@ -385,7 +390,7 @@ function renderTaskCard(task, options = {}) {
             (sub) => `
           <label class="inline-subtask ${sub.completed ? 'is-done' : ''}">
             <input type="checkbox" ${sub.completed ? 'checked' : ''} data-action="toggle-subtask-inline" data-task-id="${escapeHtml(task.id)}" data-sub-id="${escapeHtml(sub.id)}" />
-            <span class="inline-subtask-box">${icons.check(11)}</span>
+            <span class="inline-subtask-box">${icons.check(10)}</span>
             <span class="inline-subtask-title">${escapeHtml(sub.title)}</span>
           </label>
         `
@@ -396,8 +401,8 @@ function renderTaskCard(task, options = {}) {
   }
 
   return `
-    <article class="task-card ${checked ? 'is-completed' : ''} priority-border-${task.priority}" data-task-id="${escapeHtml(task.id)}">
-      <div class="task-card-main">
+    <article class="task-row ${checked ? 'is-completed' : ''}" data-task-id="${escapeHtml(task.id)}">
+      <div class="task-row-main">
         <button
           type="button"
           class="check-circle priority-${task.priority} ${checked ? 'is-checked' : ''}"
@@ -406,11 +411,11 @@ function renderTaskCard(task, options = {}) {
           aria-label="${checked ? '未完了に戻す' : '完了にする'}"
           aria-pressed="${checked}"
         >
-          ${icons.check(15)}
+          ${icons.check(13)}
         </button>
         <div class="task-body" data-action="edit-task" data-id="${escapeHtml(task.id)}">
           <div class="task-title">${escapeHtml(task.title)}</div>
-          ${badges.length > 0 ? `<div class="task-meta">${badges.join('')}</div>` : ''}
+          ${metaItems.length > 0 ? `<div class="task-meta">${metaItems.join('<span class="meta-sep" aria-hidden="true">·</span>')}</div>` : ''}
         </div>
       </div>
       ${subtasksDrawerHtml}
@@ -713,28 +718,33 @@ function renderTabBar() {
   const buckets = getTodayBuckets(state.tasks, todayStr);
   const badgeCount = buckets.stats.remainingCount;
   const tabs = [
-    { id: 'today', label: '今日', icon: icons.sun(22), badge: badgeCount > 0 ? badgeCount : null },
-    { id: 'upcoming', label: '予定', icon: icons.calendar(22) },
-    { id: 'routines', label: 'ルーティン', icon: icons.repeat(22) },
-    { id: 'all', label: 'すべて', icon: icons.layers(22) },
+    { id: 'today', label: '今日', icon: icons.sun(20), badge: badgeCount > 0 ? badgeCount : null },
+    { id: 'upcoming', label: '予定', icon: icons.calendar(20) },
+    { id: 'routines', label: 'ルーティン', icon: icons.repeat(20) },
+    { id: 'all', label: 'すべて', icon: icons.layers(20) },
   ];
 
   return `
-    <nav class="tab-bar" aria-label="メインメニュー">
-      ${tabs
-        .map(
-          (t) => `
-        <button type="button" class="tab-item ${ui.activeTab === t.id ? 'is-active' : ''}" data-action="switch-tab" data-tab="${t.id}">
-          <span class="tab-icon-wrap">
-            ${t.icon}
-            ${t.badge ? `<span class="tab-badge">${t.badge > 99 ? '99+' : t.badge}</span>` : ''}
-          </span>
-          <span class="tab-label">${t.label}</span>
-        </button>
-      `
-        )
-        .join('')}
-    </nav>
+    <div class="bottom-dock">
+      <nav class="tab-bar" aria-label="メインメニュー">
+        ${tabs
+          .map(
+            (t) => `
+          <button type="button" class="tab-item ${ui.activeTab === t.id ? 'is-active' : ''}" data-action="switch-tab" data-tab="${t.id}">
+            <span class="tab-icon-wrap">
+              ${t.icon}
+              ${t.badge ? `<span class="tab-badge">${t.badge > 99 ? '99+' : t.badge}</span>` : ''}
+            </span>
+            <span class="tab-label">${t.label}</span>
+          </button>
+        `
+          )
+          .join('')}
+      </nav>
+      <button type="button" class="fab" data-action="open-create-task" aria-label="新しいタスクを追加">
+        ${icons.plus(24)}
+      </button>
+    </div>
   `;
 }
 
@@ -976,9 +986,9 @@ function renderSettingsModal() {
             <label class="field-label">外観テーマ</label>
             <div class="segmented-control">
               ${[
-                { id: 'system', label: '自動' },
-                { id: 'light', label: 'ライト' },
                 { id: 'dark', label: 'ダーク' },
+                { id: 'light', label: 'ライト' },
+                { id: 'system', label: '自動' },
               ]
                 .map(
                   (opt) => `
@@ -993,23 +1003,26 @@ function renderSettingsModal() {
 
           <!-- アクセントカラー -->
           <div class="field-group">
-            <label class="field-label">テーマカラー</label>
+            <label class="field-label">アクセント</label>
             <div class="accent-row">
-              ${ACCENT_PRESETS.map(
-                (p) => `
+              ${ACCENT_PRESETS.map((p) => {
+                const dark = isEffectiveDark();
+                const bg = dark ? p.color : p.lightColor;
+                const fg = dark ? p.onColor : p.lightOnColor;
+                return `
                 <button
                   type="button"
                   class="accent-swatch ${accent === p.id ? 'is-active' : ''}"
-                  style="background:${p.color}"
+                  style="background:${bg};color:${fg}"
                   data-action="set-accent"
                   data-value="${p.id}"
                   aria-label="${p.name}"
                   title="${p.name}"
                 >
-                  ${accent === p.id ? icons.check(16) : ''}
+                  ${accent === p.id ? icons.check(15) : ''}
                 </button>
-              `
-              ).join('')}
+              `;
+              }).join('')}
             </div>
           </div>
 
@@ -1139,9 +1152,6 @@ function render() {
       <main class="app-main">
         ${contentHtml}
       </main>
-      <button type="button" class="fab" data-action="open-create-task" aria-label="新しいタスクを追加">
-        ${icons.plus(26)}
-      </button>
       ${renderTabBar()}
     </div>
     <div id="modal-root"></div>

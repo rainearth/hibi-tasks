@@ -79,7 +79,7 @@ export function buildSampleData(todayStr = toDateStr()) {
   ];
 
   return {
-    version: 1,
+    version: 2,
     tasks,
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
     settings: { ...DEFAULT_SETTINGS },
@@ -98,7 +98,14 @@ export function loadState() {
       return initial;
     }
     const parsed = JSON.parse(raw);
-    return sanitizeState(parsed);
+    const sanitized = sanitizeState(parsed);
+    // 旧バージョン（v1）からの自動デザイン移行（タスクは維持）
+    if (!parsed.version || parsed.version < 2) {
+      sanitized.settings = { ...DEFAULT_SETTINGS };
+      sanitized.version = 2;
+      saveState(sanitized);
+    }
+    return sanitized;
   } catch {
     return buildSampleData();
   }
@@ -110,7 +117,7 @@ export function loadState() {
 export function saveState(state) {
   try {
     const payload = {
-      version: 1,
+      version: 2,
       tasks: state.tasks || [],
       categories: state.categories || DEFAULT_CATEGORIES,
       settings: { ...DEFAULT_SETTINGS, ...(state.settings || {}) },
