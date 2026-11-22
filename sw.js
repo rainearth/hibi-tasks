@@ -1,6 +1,6 @@
 // Hibi Service Worker（オフライン完全対応・ネットワーク優先キャッシュ）
 
-const CACHE_NAME = 'hibi-cache-v1';
+const CACHE_NAME = 'hibi-cache-v2';
 const ASSETS = [
   './',
   './index.html',
